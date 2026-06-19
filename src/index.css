@@ -1,0 +1,55 @@
+:root {
+  --text: #4b4754;
+  --text-h: #08060d;
+  --muted: #8a8594;
+  --bg: #fff;
+  --panel: #faf9fb;
+  --border: #e5e4e7;
+  --row-hover: #f6f3fb;
+  --accent: #aa3bff;
+  --accent-bg: rgba(170, 59, 255, 0.1);
+  --good: #1a9e57;
+  --mid: #c79a1e;
+  --bad: #d1495b;
+
+  --sans: system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Consolas, monospace;
+
+  font: 15px/1.45 var(--sans);
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #b6b2bd;
+    --text-h: #f3f4f6;
+    --muted: #7f7a88;
+    --bg: #15161b;
+    --panel: #1c1d24;
+    --border: #2e303a;
+    --row-hover: #23212d;
+    --accent: #c084fc;
+    --accent-bg: rgba(192, 132, 252, 0.15);
+    --good: #34d17e;
+    --mid: #e3bb4e;
+    --bad: #f0758a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2 {
+  color: var(--text-h);
+  font-weight: 600;
+}
