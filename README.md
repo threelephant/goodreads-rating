@@ -59,16 +59,46 @@ npm run preview      # serve the production build
 - **Search** by title or author (debounced).
 - **Filters**: minimum ratings count and publication-year range.
 - Client-side pagination (50 per page).
+- **Add a book** — a modal to contribute a book (title, author, year, average,
+  ratings count), shared across all visitors via Supabase (see below).
 - Light/dark theme via `prefers-color-scheme`.
+
+## Add-a-book feature (Supabase)
+
+User-added books are stored in a free [Supabase](https://supabase.com) project so
+they're shared with everyone. The rating is derived from the entered average +
+ratings count (a star distribution is synthesized so the existing formula applies
+unchanged). Writes are **append-only**: anyone can add, nobody can edit/delete via
+the site — moderate rows in the Supabase dashboard.
+
+**Setup (one time):**
+
+1. Create a free Supabase project.
+2. In the SQL editor, run [`supabase/schema.sql`](supabase/schema.sql) (creates the
+   `user_books` table with RLS + append-only policies).
+3. Copy `.env.example` → `.env.local` and fill in your Project URL + anon key
+   (Project Settings → API). Restart `npm run dev`.
+4. For deployment, set the same two values as repo **Variables**:
+   ```bash
+   gh variable set VITE_SUPABASE_URL --body "https://YOUR-ref.supabase.co"
+   gh variable set VITE_SUPABASE_ANON_KEY --body "YOUR-ANON-KEY"
+   ```
+
+If the env vars are unset, the app runs read-only (the Add button is hidden).
+Note: free Supabase projects pause after ~1 week of inactivity and need a manual
+resume in the dashboard.
 
 ## Project structure
 
 ```
 scripts/build-data.ts   # ETL: download + reshape books.csv → public/books.json
 public/books.json       # generated dataset (committed)
-src/lib/rating.ts       # the SteamDB formula (single source of truth)
+supabase/schema.sql     # user_books table + RLS policies (run once in Supabase)
+src/lib/rating.ts       # the SteamDB formula + avg→stars synthesis (source of truth)
 src/lib/rating.test.ts  # formula unit tests
+src/lib/supabase.ts     # Supabase client (degrades gracefully if unconfigured)
+src/lib/userBooks.ts    # fetch/add shared user books
 src/lib/types.ts        # shared types
-src/App.tsx             # data load + filter/sort/paginate state
-src/components/         # BookTable, SearchBar, Filters, Pagination
+src/App.tsx             # data load + merge + filter/sort/paginate state
+src/components/         # BookTable, SearchBar, Filters, Pagination, AddBookModal
 ```

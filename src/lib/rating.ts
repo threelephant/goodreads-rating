@@ -44,3 +44,24 @@ export function steamRating(counts: StarCounts): number {
   const total = totalReviews(counts);
   return score - (score - 0.5) * Math.pow(2, -Math.log10(total + 1));
 }
+
+/**
+ * Synthesize a star distribution from an average (1–5) and a total rating count.
+ *
+ * Used for user-added books, where people know the average and how many ratings a
+ * book has, not the exact 1★–5★ split. With the weighted mapping, `reviewScore`
+ * depends only on the mean, so any distribution with mean = `avg` yields the same
+ * rating. We spread `total` across the two stars bracketing `avg`, which keeps the
+ * counts summing to `total` exactly and the implied mean within 1/total of `avg`.
+ */
+export function starCountsFromAverage(avg: number, total: number): StarCounts {
+  const a = Math.min(5, Math.max(1, avg));
+  const f = Math.min(4, Math.floor(a)); // lower star bin, 1..4
+  const frac = a - f; // weight on the upper bin (0 when avg is an integer)
+  const lower = Math.round(total * (1 - frac));
+  const upper = total - lower; // ensures lower + upper === total exactly
+  const c: StarCounts = { r1: 0, r2: 0, r3: 0, r4: 0, r5: 0 };
+  c[`r${f}` as keyof StarCounts] += lower;
+  c[`r${f + 1}` as keyof StarCounts] += upper;
+  return c;
+}

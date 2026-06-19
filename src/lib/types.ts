@@ -1,12 +1,26 @@
 import type { StarCounts } from "./rating";
 
-/** A trimmed record as shipped in public/books.json (see scripts/build-data.ts). */
+/**
+ * A book record. Dataset books (public/books.json) use a numeric `id`; user-added
+ * books (from Supabase) use a uuid string. `id` is only used as a React key —
+ * sorting and filtering never touch it — so widening it is safe.
+ */
 export interface Book extends StarCounts {
-  id: number;
+  id: number | string;
   title: string;
   authors: string;
   year: number | null;
   avg: number;
+  userAdded?: boolean;
+}
+
+/** The fields collected by the "Add book" modal. */
+export interface NewBookInput {
+  title: string;
+  authors: string;
+  year: number | null;
+  avg: number; // 1..5
+  ratingsCount: number; // >= 1
 }
 
 /** A book enriched with the derived ranking fields. */

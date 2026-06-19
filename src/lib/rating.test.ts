@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { reviewScore, totalReviews, steamRating } from "./rating";
+import {
+  reviewScore,
+  totalReviews,
+  steamRating,
+  starCountsFromAverage,
+} from "./rating";
+
+const meanOf = (c: { r1: number; r2: number; r3: number; r4: number; r5: number }) => {
+  const total = c.r1 + c.r2 + c.r3 + c.r4 + c.r5;
+  return total === 0 ? 0 : (c.r1 + 2 * c.r2 + 3 * c.r3 + 4 * c.r4 + 5 * c.r5) / total;
+};
 
 const stars = (r1: number, r2: number, r3: number, r4: number, r5: number) => ({
   r1,
@@ -56,5 +66,36 @@ describe("steamRating", () => {
     const belovedClassic = steamRating(stars(66715, 127936, 560092, 1481305, 2706317)); // Hunger Games
     const tinyPerfect = steamRating(stars(0, 0, 0, 0, 5));
     expect(belovedClassic).toBeGreaterThan(tinyPerfect);
+  });
+});
+
+describe("starCountsFromAverage", () => {
+  it("preserves the total count exactly", () => {
+    for (const avg of [1, 2.3, 3.5, 4.34, 4.99]) {
+      expect(totalReviews(starCountsFromAverage(avg, 5000))).toBe(5000);
+    }
+  });
+
+  it("produces a distribution whose mean is within 1/total of the requested avg", () => {
+    for (const avg of [1.2, 2.7, 3.0, 4.34, 4.8]) {
+      const c = starCountsFromAverage(avg, 10_000);
+      expect(meanOf(c)).toBeCloseTo(avg, 3);
+    }
+  });
+
+  it("makes reviewScore match (avg - 1) / 4 for the synthesized book", () => {
+    const c = starCountsFromAverage(4.2, 50_000);
+    expect(reviewScore(c)).toBeCloseTo((4.2 - 1) / 4, 4);
+  });
+
+  it("handles integer and boundary averages without overflowing star bins", () => {
+    expect(starCountsFromAverage(5, 100)).toEqual({ r1: 0, r2: 0, r3: 0, r4: 0, r5: 100 });
+    expect(starCountsFromAverage(1, 100)).toEqual({ r1: 100, r2: 0, r3: 0, r4: 0, r5: 0 });
+    expect(starCountsFromAverage(4, 100)).toEqual({ r1: 0, r2: 0, r3: 0, r4: 100, r5: 0 });
+  });
+
+  it("clamps out-of-range averages into [1,5]", () => {
+    expect(totalReviews(starCountsFromAverage(0, 100))).toBe(100);
+    expect(totalReviews(starCountsFromAverage(7, 100))).toBe(100);
   });
 });

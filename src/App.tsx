@@ -2,16 +2,27 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import type { Book, RankedBook, SortDir, SortKey } from "./lib/types";
 import { reviewScore, steamRating, totalReviews } from "./lib/rating";
+import { userBooksEnabled } from "./lib/supabase";
+import { fetchUserBooks } from "./lib/userBooks";
 import { SearchBar } from "./components/SearchBar";
 import { Filters } from "./components/Filters";
 import { BookTable } from "./components/BookTable";
 import { Pagination } from "./components/Pagination";
+import { AddBookModal } from "./components/AddBookModal";
 
 const PAGE_SIZE = 50;
 const countFmt = new Intl.NumberFormat("en-US");
 
+const enrich = (b: Book): RankedBook => ({
+  ...b,
+  total: totalReviews(b),
+  score: reviewScore(b),
+  rating: steamRating(b),
+});
+
 export default function App() {
   const [books, setBooks] = useState<RankedBook[] | null>(null);
+  const [userBooks, setUserBooks] = useState<RankedBook[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
@@ -23,31 +34,37 @@ export default function App() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [page, setPage] = useState(1);
 
-  // Load once, then enrich each book with the derived ranking fields.
+  const [modalOpen, setModalOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Load the static dataset once, enriching each book with the derived fields.
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}books.json`)
       .then((r) => {
         if (!r.ok) throw new Error(`Failed to load books.json (HTTP ${r.status})`);
         return r.json() as Promise<Book[]>;
       })
-      .then((data) => {
-        setBooks(
-          data.map((b) => ({
-            ...b,
-            total: totalReviews(b),
-            score: reviewScore(b),
-            rating: steamRating(b),
-          })),
-        );
-      })
+      .then((data) => setBooks(data.map(enrich)))
       .catch((e) => setError(String(e)));
   }, []);
 
+  // Load shared user-added books (non-blocking; failure is non-fatal).
+  useEffect(() => {
+    if (!userBooksEnabled) return;
+    fetchUserBooks()
+      .then((data) => setUserBooks(data.map(enrich)))
+      .catch((e) => console.error("Failed to load user-added books:", e));
+  }, []);
+
+  const allBooks = useMemo(
+    () => (books ? [...books, ...userBooks] : []),
+    [books, userBooks],
+  );
+
   // Filter -> sort. Pagination is applied afterwards.
   const filtered = useMemo(() => {
-    if (!books) return [];
     const q = search.trim().toLowerCase();
-    return books.filter((b) => {
+    return allBooks.filter((b) => {
       if (q && !b.title.toLowerCase().includes(q) && !b.authors.toLowerCase().includes(q))
         return false;
       if (minRatings && b.total < minRatings) return false;
@@ -55,7 +72,7 @@ export default function App() {
       if (yearTo !== "" && (b.year === null || b.year > yearTo)) return false;
       return true;
     });
-  }, [books, search, minRatings, yearFrom, yearTo]);
+  }, [allBooks, search, minRatings, yearFrom, yearTo]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -95,6 +112,17 @@ export default function App() {
     });
   }, []);
 
+  const handleAdded = useCallback(
+    (book: Book) => {
+      const ranked = enrich(book);
+      setUserBooks((prev) => [ranked, ...prev]);
+      // Overall rank by SteamDB rating across every book.
+      const better = allBooks.filter((b) => b.rating > ranked.rating).length;
+      setNotice(`Added “${ranked.title}” — ranked #${better + 1} by SteamDB rating.`);
+    },
+    [allBooks],
+  );
+
   return (
     <div className="app">
       <header className="app-header">
@@ -122,7 +150,21 @@ export default function App() {
               onYearFrom={setYearFrom}
               onYearTo={setYearTo}
             />
+            {userBooksEnabled && (
+              <button className="btn-primary add-book-btn" onClick={() => setModalOpen(true)}>
+                + Add book
+              </button>
+            )}
           </div>
+
+          {notice && (
+            <div className="notice" role="status">
+              {notice}
+              <button className="notice-close" onClick={() => setNotice(null)} aria-label="Dismiss">
+                ×
+              </button>
+            </div>
+          )}
 
           <div className="result-meta">
             {countFmt.format(sorted.length)} {sorted.length === 1 ? "book" : "books"} match
@@ -143,6 +185,14 @@ export default function App() {
             </>
           )}
         </>
+      )}
+
+      {userBooksEnabled && (
+        <AddBookModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onAdded={handleAdded}
+        />
       )}
     </div>
   );

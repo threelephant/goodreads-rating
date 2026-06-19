@@ -55,9 +55,12 @@ export function BookTable({ items, startRank, sortKey, sortDir, onSort }: Props)
       </thead>
       <tbody>
         {items.map((b, i) => (
-          <tr key={b.id}>
+          <tr key={b.id} className={b.userAdded ? "user-added" : undefined}>
             <td className="num rank-col">{startRank + i}</td>
-            <td className="title-col">{b.title}</td>
+            <td className="title-col">
+              {b.title}
+              {b.userAdded && <span className="added-badge">added</span>}
+            </td>
             <td className="author-col">{b.authors}</td>
             <td className="num">{b.year ?? "—"}</td>
             <td className="num">{b.avg.toFixed(2)}</td>
