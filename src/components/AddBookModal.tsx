@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Book, NewBookInput } from "../lib/types";
 import { addUserBook } from "../lib/userBooks";
+import { parseGoodreadsText } from "../lib/parseGoodreads";
 
 interface Props {
   open: boolean;
@@ -16,6 +17,10 @@ export function AddBookModal({ open, onClose, onAdded }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
+
   // Sync the native <dialog> with the `open` prop (gives us focus-trap, Esc, backdrop).
   useEffect(() => {
     const dlg = dialogRef.current;
@@ -23,6 +28,9 @@ export function AddBookModal({ open, onClose, onAdded }: Props) {
     if (open && !dlg.open) {
       setForm(EMPTY);
       setError(null);
+      setScanning(false);
+      setScanProgress(0);
+      setScanMessage(null);
       dlg.showModal();
     } else if (!open && dlg.open) {
       dlg.close();
@@ -31,6 +39,72 @@ export function AddBookModal({ open, onClose, onAdded }: Props) {
 
   const set = (key: keyof typeof EMPTY, value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  // OCR a screenshot in the browser (Tesseract.js, dynamically imported) and
+  // pre-fill whatever fields we can parse. The user reviews before saving.
+  const processImage = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setScanMessage("That's not an image — drop or paste a screenshot.");
+      return;
+    }
+    setScanning(true);
+    setScanProgress(0);
+    setScanMessage(null);
+    setError(null);
+    try {
+      const Tesseract = (await import("tesseract.js")).default;
+      const { data } = await Tesseract.recognize(file, "eng", {
+        logger: (m) => {
+          if (m.status === "recognizing text") setScanProgress(Math.round(m.progress * 100));
+        },
+      });
+      const parsed = parseGoodreadsText(data.text);
+      const found =
+        Number(Boolean(parsed.title)) +
+        Number(Boolean(parsed.authors)) +
+        Number(Boolean(parsed.avg)) +
+        Number(Boolean(parsed.count)) +
+        Number(Boolean(parsed.year));
+      if (found === 0) {
+        setScanMessage("Couldn't read any fields — fill them in manually below.");
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        ...(parsed.title ? { title: parsed.title } : {}),
+        ...(parsed.authors ? { authors: parsed.authors } : {}),
+        ...(parsed.avg ? { avg: parsed.avg } : {}),
+        ...(parsed.count ? { count: parsed.count } : {}),
+        ...(parsed.year ? { year: parsed.year } : {}),
+      }));
+      setScanMessage("Scanned — please review the fields below before saving.");
+    } catch {
+      setScanMessage("Scan failed. You can still fill in the fields manually.");
+    } finally {
+      setScanning(false);
+    }
+  }, []);
+
+  // Paste a screenshot anywhere while the modal is open.
+  useEffect(() => {
+    if (!open) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith("image/")) {
+          const file = items[i].getAsFile();
+          if (file) {
+            e.preventDefault();
+            void processImage(file);
+          }
+          break;
+        }
+      }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [open, processImage]);
 
   const validate = (): NewBookInput | string => {
     const title = form.title.trim();
@@ -90,10 +164,41 @@ export function AddBookModal({ open, onClose, onAdded }: Props) {
           the number of ratings.
         </p>
 
+        {/* Scan a Goodreads screenshot to auto-fill the fields (runs in your browser). */}
+        <label
+          className={`scan-zone${scanning ? " scanning" : ""}`}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const file = e.dataTransfer.files?.[0];
+            if (file) void processImage(file);
+          }}
+        >
+          <input
+            type="file"
+            accept="image/*"
+            hidden
+            disabled={scanning}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void processImage(file);
+              e.target.value = "";
+            }}
+          />
+          {scanning ? (
+            <span className="scan-hint">Scanning… {scanProgress}%</span>
+          ) : (
+            <span className="scan-hint">
+              📷 <strong>Scan a Goodreads screenshot</strong> — click, drop, or paste
+              an image to auto-fill
+            </span>
+          )}
+        </label>
+        {scanMessage && <div className="scan-message">{scanMessage}</div>}
+
         <label className="field">
           <span>Title *</span>
           <input
-            autoFocus
             value={form.title}
             onChange={(e) => set("title", e.target.value)}
             maxLength={300}
@@ -147,7 +252,7 @@ export function AddBookModal({ open, onClose, onAdded }: Props) {
           <button type="button" className="btn-secondary" onClick={onClose} disabled={submitting}>
             Cancel
           </button>
-          <button type="submit" className="btn-primary" disabled={submitting}>
+          <button type="submit" className="btn-primary" disabled={submitting || scanning}>
             {submitting ? "Adding…" : "Add book"}
           </button>
         </div>
