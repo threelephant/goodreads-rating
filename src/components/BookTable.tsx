@@ -6,6 +6,7 @@ interface Props {
   sortKey: SortKey;
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
+  onHide?: (id: RankedBook["id"]) => void;
 }
 
 const countFmt = new Intl.NumberFormat("en-US");
@@ -17,7 +18,7 @@ function ratingClass(rating: number): string {
   return "bad";
 }
 
-export function BookTable({ items, startRank, sortKey, sortDir, onSort }: Props) {
+export function BookTable({ items, startRank, sortKey, sortDir, onSort, onHide }: Props) {
   const SortHeader = ({
     col,
     label,
@@ -51,6 +52,7 @@ export function BookTable({ items, startRank, sortKey, sortDir, onSort }: Props)
           <SortHeader col="avg" label="Avg ★" numeric />
           <SortHeader col="total" label="Ratings" numeric />
           <SortHeader col="rating" label="SteamDB rating" numeric />
+          {onHide && <th className="hide-col" aria-label="Hide" />}
         </tr>
       </thead>
       <tbody>
@@ -68,6 +70,19 @@ export function BookTable({ items, startRank, sortKey, sortDir, onSort }: Props)
             <td className={`num rating-cell ${ratingClass(b.rating)}`}>
               {(b.rating * 100).toFixed(2)}%
             </td>
+            {onHide && (
+              <td className="hide-col">
+                <button
+                  type="button"
+                  className="hide-btn"
+                  title="Hide this book"
+                  aria-label={`Hide ${b.title}`}
+                  onClick={() => onHide(b.id)}
+                >
+                  Hide
+                </button>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>

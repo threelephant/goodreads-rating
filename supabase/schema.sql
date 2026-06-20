@@ -45,3 +45,37 @@ create policy "user_books insert"
   with check (true);
 
 -- No update/delete policy or grant => those operations are rejected (append-only).
+
+
+-- ---------------------------------------------------------------------------
+-- Shared "hidden books" store. A row here means a book is hidden from everyone's
+-- view. Hiding inserts a row; un-hiding deletes it. Anyone may hide or un-hide
+-- (anonymous, vandal-able by design) — moderate by clearing this table.
+-- `book_id` is the dataset's numeric id (as text) OR a user_books uuid.
+
+create table if not exists public.hidden_books (
+  book_id    text        primary key,
+  created_at timestamptz not null default now()
+);
+
+alter table public.hidden_books enable row level security;
+
+grant select, insert, delete on public.hidden_books to anon, authenticated;
+
+drop policy if exists "hidden_books read" on public.hidden_books;
+create policy "hidden_books read"
+  on public.hidden_books for select
+  to anon, authenticated
+  using (true);
+
+drop policy if exists "hidden_books insert" on public.hidden_books;
+create policy "hidden_books insert"
+  on public.hidden_books for insert
+  to anon, authenticated
+  with check (true);
+
+drop policy if exists "hidden_books delete" on public.hidden_books;
+create policy "hidden_books delete"
+  on public.hidden_books for delete
+  to anon, authenticated
+  using (true);
